@@ -336,6 +336,50 @@ def multiCmsRun(
       gpu_repeated   = list(map(str, itertools.islice(itertools.cycle(list(gpus.keys())), jobs * gpus_per_job)))
       gpu_assignment = [ ','.join(gpu_repeated[i*gpus_per_job:(i+1)*gpus_per_job]) for i in range(jobs) ]
 
+  # use both CPUs and both GPUs
+  """
+  NUMA nodes
+    node 0 cpus: 0-15,128-143
+    node 1 cpus: 16-31,144-159
+    node 2 cpus: 32-47,160-175
+    node 3 cpus: 48-63,176-191
+    node 4 cpus: 64-79,192-207
+    node 5 cpus: 80-95,208-223
+    node 6 cpus: 96-111,224-239
+    node 7 cpus: 112-127,240-255
+
+  node distances:
+  node   0   1   2   3   4   5   6   7
+    0:  10  12  12  12  32  32  32  32
+    1:  12  10  12  12  32  32  32  32
+    2:  12  12  10  12  32  32  32  32
+    3:  12  12  12  10  32  32  32  32
+    4:  32  32  32  32  10  12  12  12
+    5:  32  32  32  32  12  10  12  12
+    6:  32  32  32  32  12  12  10  12
+    7:  32  32  32  32  12  12  12  10
+
+              GPU0    GPU1    NIC0    NIC1    CPU Affinity    NUMA Affinity   GPU NUMA ID
+    GPU0     X      SYS     SYS     SYS     32-47,160-175   2               N/A
+    GPU1    SYS      X      SYS     SYS     64-79,192-207   4               N/A
+    NIC0    SYS     SYS      X      PIX
+    NIC1    SYS     SYS     PIX      X
+
+  GPU0: Tesla T4 (UUID: GPU-d913526b-e251-ab70-e4a1-385dc9c19e9e)
+  GPU1: Tesla T4 (UUID: GPU-983b4a19-980c-bfbb-19ba-ab2ad93f197e)
+
+  NIC0: mlx5_0
+  NIC1: mlx5_1
+  """
+
+  # fill the NUMA nodes from 0 to 7
+  numa_cpu_nodes = list(itertools.islice(itertools.cycle(range(8)), jobs))
+  numa_mem_nodes = list(itertools.islice(itertools.cycle(range(8)), jobs))
+  cpu_assignment = [ None ] * jobs
+
+  # disable GPUs
+  gpu_assignment = [ None ] * jobs
+
   if warmup:
     print('Warming up')
     sys.stdout.flush()
